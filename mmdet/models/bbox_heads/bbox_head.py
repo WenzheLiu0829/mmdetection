@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-from mmdet.core import (bbox_transform_inv, bbox_target, multiclass_nms,
+from mmdet.core import (bbox_transform_inv, multiclass_nms, bbox_target,
                         weighted_cross_entropy, weighted_smoothl1, accuracy)
 
 
@@ -61,7 +61,7 @@ class BBoxHead(nn.Module):
         bbox_pred = self.fc_reg(x) if self.with_reg else None
         return cls_score, bbox_pred
 
-    def bbox_target(self, pos_proposals, neg_proposals, pos_gt_bboxes,
+    def _bbox_target(self, pos_proposals, neg_proposals, pos_gt_bboxes,
                     pos_gt_labels, rcnn_train_cfg):
         reg_num_classes = 1 if self.reg_class_agnostic else self.num_classes
         cls_reg_targets = bbox_target(
@@ -96,6 +96,7 @@ class BBoxHead(nn.Module):
                        cls_score,
                        bbox_pred,
                        img_shape,
+                       scale_factor,
                        rescale=False,
                        nms_cfg=None):
         if isinstance(cls_score, list):
@@ -111,7 +112,7 @@ class BBoxHead(nn.Module):
             # TODO: add clip here
 
         if rescale:
-            bboxes /= img_shape[-1]
+            bboxes /= scale_factor.float()
 
         if nms_cfg is None:
             return bboxes, scores

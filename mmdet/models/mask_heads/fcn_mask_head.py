@@ -3,14 +3,12 @@ import numpy as np
 import pycocotools.mask as mask_util
 import torch
 import torch.nn as nn
-import torch.utils.checkpoint as cp
 
-from ..common import ConvModule
-from mmdet.core import mask_target, mask_cross_entropy
+from ..utils import ConvModule
+from mmdet.core import mask_cross_entropy, mask_target
 
 
 class FCNMaskHead(nn.Module):
-
     def __init__(self,
                  num_convs=4,
                  roi_feat_size=14,
@@ -21,7 +19,6 @@ class FCNMaskHead(nn.Module):
                  upsample_ratio=2,
                  num_classes=81,
                  class_agnostic=False,
-                 with_cp=False,
                  normalize=None):
         super(FCNMaskHead, self).__init__()
         if upsample_method not in [None, 'deconv', 'nearest', 'bilinear']:
@@ -39,7 +36,6 @@ class FCNMaskHead(nn.Module):
         self.class_agnostic = class_agnostic
         self.normalize = normalize
         self.with_bias = normalize is None
-        self.with_cp = with_cp
 
         self.convs = nn.ModuleList()
         for i in range(self.num_convs):
@@ -79,25 +75,9 @@ class FCNMaskHead(nn.Module):
                 m.weight, mode='fan_out', nonlinearity='relu')
             nn.init.constant_(m.bias, 0)
 
-    def convs_forward(self, x):
-
-        def m_lvl_convs_forward(x):
-            for conv in self.convs[1:-1]:
-                x = conv(x)
-            return x
-
-        if self.num_convs > 0:
-            x = self.convs[0](x)
-            if self.num_convs > 1:
-                if self.with_cp and x.requires_grad:
-                    x = cp.checkpoint(m_lvl_convs_forward, x)
-                else:
-                    x = m_lvl_convs_forward(x)
-                x = self.convs[-1](x)
-        return x
-
     def forward(self, x):
-        x = self.convs_forward(x)
+        for conv in self.convs:
+            x = conv(x)
         if self.upsample is not None:
             x = self.upsample(x)
             if self.upsample_method == 'deconv':
@@ -105,10 +85,10 @@ class FCNMaskHead(nn.Module):
         mask_pred = self.conv_logits(x)
         return mask_pred
 
-    def mask_target(self, pos_proposals, pos_assigned_gt_inds, gt_masks,
-                    img_shapes, rcnn_train_cfg):
+    def _mask_target(self, pos_proposals, pos_assigned_gt_inds, gt_masks,
+                     img_meta, rcnn_train_cfg):
         mask_targets = mask_target(pos_proposals, pos_assigned_gt_inds,
-                                   gt_masks, img_shapes, rcnn_train_cfg)
+                                   gt_masks, img_meta, rcnn_train_cfg)
         return mask_targets
 
     def loss(self, mask_pred, mask_targets, labels):
@@ -120,6 +100,7 @@ class FCNMaskHead(nn.Module):
                       det_bboxes,
                       det_labels,
                       img_shape,
+                      scale_factor,
                       rcnn_test_cfg,
                       ori_scale,
                       rescale=True):
@@ -143,11 +124,11 @@ class FCNMaskHead(nn.Module):
         cls_segms = [[] for _ in range(self.num_classes - 1)]
         bboxes = det_bboxes.cpu().numpy()[:, :4]
         labels = det_labels.cpu().numpy() + 1
-        scale_factor = img_shape[-1] if rescale else 1.0
-        img_h = ori_scale['height'] if rescale else np.round(
-            ori_scale['height'].item() * img_shape[-1].item()).astype(np.int32)
-        img_w = ori_scale['width'] if rescale else np.round(
-            ori_scale['width'].item() * img_shape[-1].item()).astype(np.int32)
+        scale_factor = scale_factor.float() if rescale else 1.0
+        img_h = ori_scale[0] if rescale else np.round(
+            ori_scale[0].item() * scale_factor.item()).astype(np.int32)
+        img_w = ori_scale[1] if rescale else np.round(
+            ori_scale[1].item() * scale_factor.item()).astype(np.int32)
 
         for i in range(bboxes.shape[0]):
             bbox = (bboxes[i, :] / float(scale_factor)).astype(int)
@@ -164,7 +145,7 @@ class FCNMaskHead(nn.Module):
 
             im_mask = np.zeros((img_h, img_w), dtype=np.float32)
 
-            im_mask[bbox[1]:bbox[1] + h, bbox[0]:bbox[0] + w] = mmcv.resize(
+            im_mask[bbox[1]:bbox[1] + h, bbox[0]:bbox[0] + w] = mmcv.imresize(
                 mask_pred_, (w, h))
             # im_mask = cv2.resize(im_mask, (img_w, img_h))
             im_mask = np.array(

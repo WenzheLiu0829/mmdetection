@@ -7,10 +7,11 @@ import mmcv
 import numpy as np
 import torch
 from mmcv.torchpack import Hook
-from mmdet import collate, scatter
+from mmdet.datasets import collate
+from mmdet.nn.parallel import scatter
 from pycocotools.cocoeval import COCOeval
 
-from .eval import eval_recalls
+from ..eval import eval_recalls
 
 
 class EmptyCacheHook(Hook):
