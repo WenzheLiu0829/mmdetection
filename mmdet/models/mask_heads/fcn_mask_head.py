@@ -9,6 +9,7 @@ from mmdet.core import mask_cross_entropy, mask_target
 
 
 class FCNMaskHead(nn.Module):
+
     def __init__(self,
                  num_convs=4,
                  roi_feat_size=14,
@@ -95,15 +96,8 @@ class FCNMaskHead(nn.Module):
         loss_mask = mask_cross_entropy(mask_pred, mask_targets, labels)
         return loss_mask
 
-    def get_seg_masks(self,
-                      mask_pred,
-                      det_bboxes,
-                      det_labels,
-                      img_shape,
-                      scale_factor,
-                      rcnn_test_cfg,
-                      ori_scale,
-                      rescale=True):
+    def get_seg_masks(self, mask_pred, det_bboxes, det_labels, rcnn_test_cfg,
+                      ori_scale):
         """Get segmentation masks from mask_pred and bboxes
         Args:
             mask_pred (Tensor or ndarray): shape (n, #class+1, h, w).
@@ -124,14 +118,11 @@ class FCNMaskHead(nn.Module):
         cls_segms = [[] for _ in range(self.num_classes - 1)]
         bboxes = det_bboxes.cpu().numpy()[:, :4]
         labels = det_labels.cpu().numpy() + 1
-        scale_factor = scale_factor.float() if rescale else 1.0
-        img_h = ori_scale[0] if rescale else np.round(
-            ori_scale[0].item() * scale_factor.item()).astype(np.int32)
-        img_w = ori_scale[1] if rescale else np.round(
-            ori_scale[1].item() * scale_factor.item()).astype(np.int32)
+        img_h = ori_scale[0]
+        img_w = ori_scale[1]
 
         for i in range(bboxes.shape[0]):
-            bbox = (bboxes[i, :] / float(scale_factor)).astype(int)
+            bbox = bboxes[i, :].astype(int)
             label = labels[i]
             w = bbox[2] - bbox[0] + 1
             h = bbox[3] - bbox[1] + 1

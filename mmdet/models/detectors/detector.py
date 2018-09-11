@@ -208,11 +208,8 @@ class Detector(nn.Module):
                 mask_pred,
                 det_bboxes,
                 det_labels,
-                img_shape,
-                scale_factor,
                 self.rcnn_test_cfg,
-                ori_scale=img_meta['ori_shape'],
-                rescale=rescale)
+                ori_scale=img_meta['ori_shape'])
         return segm_result
 
     def simple_test(self, img, img_meta, proposals=None, rescale=False):

@@ -1,4 +1,3 @@
-# TODO distributed testing
 import os.path as osp
 import sys
 sys.path.append(osp.abspath(osp.join(__file__, '../../')))

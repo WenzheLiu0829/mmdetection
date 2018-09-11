@@ -19,9 +19,9 @@ from mmdet.nn.parallel import MMDataParallel
 def parse_args():
     parser = argparse.ArgumentParser(description='MMDet train val detector')
     parser.add_argument('config', help='train config file path')
+    parser.add_argument('--validate', action='store_true', help='validate')
     parser.add_argument(
         '--dist', action='store_true', help='distributed training or not')
-    parser.add_argument('--validate', action='store_true', help='validate')
     parser.add_argument('--world_size', default=1, type=int)
     parser.add_argument('--rank', default=0, type=int)
     args = parser.parse_args()
@@ -40,7 +40,7 @@ def main():
         # init_dist(
         #     args.world_size,
         #     args.rank,
-        #     **dist_params)
+        #     **cfg.dist_params)
         args.rank, args.world_size = init_dist_cluster()
     else:
         print('Disabled distributed training.')
